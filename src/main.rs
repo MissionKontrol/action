@@ -1,30 +1,34 @@
 use action::*;
 
 fn main() {
-    let player1 = Actor::new( 0,1,10, 20, 6, 6);
-    let player2= Actor::new( 1,2,10, 20, 6, 6);
+    let player1 = Actor::new( 0,0,10, 20, 6, 6);
+    let player2= Actor::new( 1,1,10, 20, 6, 6);
 
-    let actor_list = vec![player1,player2];
+    let mut actor_list: ActorList = vec![player1,player2];
+    let order_of_appearance = actor_list.clone();
 
-    let action = actor_list[0].get_action(&actor_list);
+    while !actor_list.done() {
+        for actor in &order_of_appearance {
+            if is_alive(actor_list.get_actor(&actor.get_id())){
+                let mut action_state: Action = actor.get_action(&actor_list);
 
-    println!("{}",action.get_action());
-    println!("{}",action.get_state());
-    println!("{:?}",action.get_actor_list());
+                println!("{}",action_state.get_action());
+                println!("{}",action_state.get_state());
+                println!("{:?}",action_state.get_actor_list());
+            
+                action_state = action_state.execute_action();
+                println!("{}",action_state.get_action());
+                println!("{}",action_state.get_state());
+                println!("{:?}",action_state.get_actor_list());
+                actor_list = action_state.get_actor_list().to_owned();
+            }
+        }
+    }
+}
 
-    let action: Action = action.execute_action();
-    println!("{}",action.get_action());
-    println!("{}",action.get_state());
-    println!("{:?}",action.get_actor_list());
-
-    let action = actor_list[1].get_action(&action.get_actor_list());
-
-    println!("{}",action.get_action());
-    println!("{}",action.get_state());
-    println!("{:?}",action.get_actor_list());
-
-    let action: Action = action.execute_action();
-    println!("{}",action.get_action());
-    println!("{}",action.get_state());
-    println!("{:?}",action.get_actor_list());
+fn is_alive(actor: Option<Actor>) -> bool {
+    match actor {
+        Some(actor) => actor.is_alive(),
+        None => false,
+    }
 }

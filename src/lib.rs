@@ -11,7 +11,7 @@ impl ACTION {
 
 pub trait ActionState {
     fn get_state(&self) -> String;
-    fn get_actor_list(&self) -> ActorList;
+    fn get_actor_list(&self) -> &ActorList;
     fn get_action(&self) -> String;
     fn execute_action(&self) -> Action;
 }
@@ -27,8 +27,8 @@ impl ActionState for ActionReady {
         "Ready".to_string()
     }
 
-    fn get_actor_list(&self) -> ActorList {
-        self.actor_list.clone()
+    fn get_actor_list(&self) -> &ActorList {
+        &self.actor_list
     }
 
     fn get_action(&self) -> String {
@@ -58,8 +58,8 @@ impl  ActionState for ActionComplete {
         "Complete".to_string()
     }
 
-    fn get_actor_list(&self) -> ActorList {
-        self.actor_list.clone()
+    fn get_actor_list(&self) -> &ActorList {
+        &self.actor_list
     }
 
     fn get_action(&self) -> String {
@@ -100,8 +100,10 @@ impl Actions for Attack {
             target = target.take_damage(damage);
         }
 
+        if target.is_alive() { 
             current_actors.push(target);
-            current_actors.to_owned()
+        }
+            current_actors
     }
 }
 
@@ -117,7 +119,29 @@ impl Attack {
     }
 }
 
-type ActorList = Vec<Actor>;
+pub type ActorList = Vec<Actor>;
+
+pub trait ActorListActions {
+    fn get_actor(&self, id: &usize) -> Option<Actor>;
+    fn done(&self) -> bool;
+}
+
+impl ActorListActions for ActorList {
+    fn get_actor(&self, id: &usize) -> Option<Actor> {
+        match self.iter().find(|actor| actor.id == *id){
+            Some(actor) => Some(actor.to_owned()),
+            None => None
+        }
+    }
+
+    fn done(&self) -> bool {
+        let team_a_size = &self.iter().fold(0_u8,|acc, actor| if actor.team_id == 0 { acc + 1} else { acc });
+        let team_b_size = &self.iter().fold(0_u8,|acc, actor| if actor.team_id == 1 { acc + 1} else { acc });
+        println!("team A: {} team B: {}", team_a_size,team_b_size);
+        if team_a_size == &0 || team_b_size == &0 { return true }
+        else { false }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Actor {
@@ -144,8 +168,21 @@ impl Actor {
     }
 
     pub fn take_damage(mut self, damage: u8) -> Actor {
-        self.hit_points -= damage;
+        let remaining_points = self.hit_points as i16 - damage as i16;
+        if remaining_points <= 0 {
+            self.hit_points = 0;
+        }
+        else { self.hit_points = remaining_points as u8; }
         self
+    }
+
+    pub fn is_alive(&self) -> bool {
+        if self.hit_points > 0 { return true }
+        false
+    }
+
+    pub fn get_id(&self) -> usize {
+        self.id
     }
 
     fn select_target(&self, actor_list:  &Vec<Actor>) -> Option<usize> {
