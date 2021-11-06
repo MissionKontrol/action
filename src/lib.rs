@@ -257,16 +257,17 @@ impl ReportProcessor for StdConsole {
     }
 }
 
-trait Reporter {
-    fn bind_channel(self, processor_id: u8, reporter: Sender<String>);
+pub trait Reporter {
+    fn bind_channel(self, processor_id: u8, reporter: Sender<String>) -> Self;
     fn unbind_channel(self, processor_id: u8);
     fn reporting_active(&self) -> bool;
     fn send_report(&self, buffer: String);
 }
 
 impl Reporter for Actor {
-    fn bind_channel(mut self, processor_id: u8, sender: Sender<String>){
+    fn bind_channel(mut self, processor_id: u8, sender: Sender<String>) -> Self {
         self.report_bindings.insert(processor_id, sender);
+        self
     }
 
     fn unbind_channel(mut self, processor_id: u8) {
@@ -274,7 +275,7 @@ impl Reporter for Actor {
     }
 
     fn reporting_active(&self) -> bool {
-        if self.report_bindings.len() > 1 { true }
+        if self.report_bindings.len() > 0 { true }
         else { false }
     }
 
