@@ -1,6 +1,6 @@
 use rand::Rng;
 
-pub type Action = Box<dyn ActionState>;
+pub type Action = Box<ACTION>;
 pub type ACTION = dyn ActionState;
 
 impl ACTION {
@@ -44,7 +44,6 @@ impl ActionState for ActionReady {
             return Box::new(ActionComplete{actor_list: result});
         }
         Box::new(ActionComplete{actor_list: self.actor_list.clone()})
-
     }
 }
 
@@ -71,7 +70,7 @@ impl  ActionState for ActionComplete {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum ActionType {
     Attack(Attack),
     Dodge,
@@ -151,14 +150,20 @@ pub struct Actor {
     hit_points: u8,
     hit_die: u8,
     damage_die: u8,
+    report_bindings: HashMap<u8,Sender<String>>,
 }
 
 impl Actor {
     pub fn new(id: usize, team_id: u8, armour_class: u8, hit_points: u8, hit_die: u8, damage_die: u8) -> Self { 
-        Self { id, team_id, armour_class, hit_points, hit_die, damage_die } }
+        Self { id, team_id, armour_class, hit_points, hit_die, damage_die, report_bindings: HashMap::new()}}
 
     pub fn get_action(&self, actor_list: &ActorList) -> Action {
         let action = self.decide_action(actor_list);
+
+        if self.reporting_active(){
+            self.send_report(format!("{} decides to {:?}", self.id, action ));
+        }
+
         Box::new(ActionReady{ actor_list: actor_list.clone(), readied_action: action})
     }
 
@@ -197,6 +202,87 @@ impl Actor {
         }
         else {
             ActionType::None
+        }
+    }
+}
+
+use std::{collections::HashMap, sync::mpsc::{Receiver, SendError, Sender, channel}};
+
+
+pub type Printer = Box<PRINTER>;
+pub type PRINTER = dyn ReportProcessor;
+
+impl PRINTER{
+    pub fn new(processor_type: ProcessorType) -> (Printer, Sender<String>) {
+      let (sender, receiver):(Sender<String>, std::sync::mpsc::Receiver<_>) = channel();
+
+        match processor_type {
+            ProcessorType::Stdout  => (Box::new(StdConsole {receiver}),sender),
+            ProcessorType::Stderr  => (Box::new(StdConsole {receiver}),sender),
+            ProcessorType::File(_) => (Box::new(StdConsole {receiver}),sender),
+        }
+    }
+}
+pub enum ProcessorType {
+    Stdout,
+    Stderr,
+    File(String),
+}
+
+pub trait ReportProcessor {
+    fn bind_channel(self, receiver: Receiver<String>);
+    fn read_channel(&self);
+    fn flush_buffer(&self, buffer: String);
+}
+
+struct StdConsole {
+    receiver: Receiver<String>,
+}
+
+impl ReportProcessor for StdConsole {
+    fn bind_channel(mut self, receiver: Receiver<String>) {
+        self.receiver = receiver;
+    }
+
+    fn read_channel(&self){
+        let buffer = self.receiver.recv();
+            match buffer {
+                Ok(buffer) => self.flush_buffer(buffer),
+                Err(error) => println!("StdConsole recieve error: {}", error),
+        }
+    }
+
+    fn flush_buffer(&self, buffer: String){
+        println!("{}",buffer);
+    }
+}
+
+trait Reporter {
+    fn bind_channel(self, processor_id: u8, reporter: Sender<String>);
+    fn unbind_channel(self, processor_id: u8);
+    fn reporting_active(&self) -> bool;
+    fn send_report(&self, buffer: String);
+}
+
+impl Reporter for Actor {
+    fn bind_channel(mut self, processor_id: u8, sender: Sender<String>){
+        self.report_bindings.insert(processor_id, sender);
+    }
+
+    fn unbind_channel(mut self, processor_id: u8) {
+        self.report_bindings.remove(&processor_id);
+    }
+
+    fn reporting_active(&self) -> bool {
+        if self.report_bindings.len() > 1 { true }
+        else { false }
+    }
+
+    fn send_report(&self, buffer: String) {
+        for (_, binding) in &self.report_bindings {
+            if let Err(error) = binding.send(buffer.clone()){
+                println!("Actor send error: {}", error);
+            }
         }
     }
 }

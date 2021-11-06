@@ -7,6 +7,8 @@ fn main() {
     let mut actor_list: ActorList = vec![player1,player2];
     let order_of_appearance = actor_list.clone();
 
+    let (stdout_writer, sender) = PRINTER::new(action::ProcessorType::Stdout);
+
     while !actor_list.done() {
         for actor in &order_of_appearance {
             if is_alive(actor_list.get_actor(&actor.get_id())){
