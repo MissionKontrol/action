@@ -91,10 +91,8 @@ trait Actions {
 impl Actions for Attack {
     fn execute(&self, mut current_actors: ActorList) -> ActorList {
         let result = Attack::roll_attack();
-        let mut target = current_actors.remove(self.target);
-        print!("Does this {} hit? ",&result);
+        let mut target = current_actors.remove(self.target);  // wrong by id of actor
         if target.does_this_hit(result) {
-            println!("Yes!");
             let damage = Attack::roll_damage(&self.damage_die);
             target = target.take_damage(damage);
         }
@@ -136,7 +134,6 @@ impl ActorListActions for ActorList {
     fn done(&self) -> bool {
         let team_a_size = &self.iter().fold(0_u8,|acc, actor| if actor.team_id == 0 { acc + 1} else { acc });
         let team_b_size = &self.iter().fold(0_u8,|acc, actor| if actor.team_id == 1 { acc + 1} else { acc });
-        println!("team A: {} team B: {}", team_a_size,team_b_size);
         if team_a_size == &0 || team_b_size == &0 { return true }
         else { false }
     }
@@ -161,23 +158,39 @@ impl Actor {
         let action = self.decide_action(actor_list);
 
         if self.reporting_active(){
-            self.send_report(format!("{} decides to {:?}", self.id, action ));
+            self.send_report(format!("{} decides to {:?}", self.id, action));
         }
 
         Box::new(ActionReady{ actor_list: actor_list.clone(), readied_action: action})
     }
 
     pub fn does_this_hit(&self, attack_roll: u8) -> bool {
-        if attack_roll as u8 > self.armour_class { return true }
+        if attack_roll as u8 > self.armour_class { 
+            if self.reporting_active() {
+                self.send_report(format!("{} Hits",attack_roll));
+            }
+            return true 
+        }
+        if self.reporting_active() {
+            self.send_report(format!("{} Misses", attack_roll));
+        }
         return false
     }
 
     pub fn take_damage(mut self, damage: u8) -> Actor {
         let remaining_points = self.hit_points as i16 - damage as i16;
         if remaining_points <= 0 {
+            if self.reporting_active() {
+                self.send_report(format!("{} takes {} dies.", self.id, damage));
+            }
             self.hit_points = 0;
+            self = self.unbind_channel(1);
         }
-        else { self.hit_points = remaining_points as u8; }
+        else {
+            self.hit_points = remaining_points as u8; }
+            if self.reporting_active() {
+                self.send_report(format!("{} takes {} and survives on {}.", self.id, damage, self.hit_points));
+            } 
         self
     }
 
@@ -206,20 +219,20 @@ impl Actor {
     }
 }
 
-use std::{collections::HashMap, sync::mpsc::{Receiver, SendError, Sender, channel}};
+use std::{collections::HashMap, sync::mpsc::{Receiver,RecvError, Sender, channel}};
 
 
 pub type Printer = Box<PRINTER>;
-pub type PRINTER = dyn ReportProcessor;
+pub type PRINTER = dyn ReportProcessor + Send;
 
 impl PRINTER{
-    pub fn new(processor_type: ProcessorType) -> (Printer, Sender<String>) {
+    pub fn new(processor_type: ProcessorType) -> (Sender<String>, Printer) {
       let (sender, receiver):(Sender<String>, std::sync::mpsc::Receiver<_>) = channel();
 
         match processor_type {
-            ProcessorType::Stdout  => (Box::new(StdConsole {receiver}),sender),
-            ProcessorType::Stderr  => (Box::new(StdConsole {receiver}),sender),
-            ProcessorType::File(_) => (Box::new(StdConsole {receiver}),sender),
+            ProcessorType::Stdout  => (sender, Box::new(StdConsole {receiver}) as Printer),
+            ProcessorType::Stderr  => (sender, Box::new(StdConsole {receiver})),
+            ProcessorType::File(_) => (sender, Box::new(StdConsole {receiver})),
         }
     }
 }
@@ -231,8 +244,9 @@ pub enum ProcessorType {
 
 pub trait ReportProcessor {
     fn bind_channel(self, receiver: Receiver<String>);
-    fn read_channel(&self);
+    fn read_channel(&self) -> bool;
     fn flush_buffer(&self, buffer: String);
+    fn receive(&self) -> Result<String, RecvError>;
 }
 
 struct StdConsole {
@@ -244,22 +258,27 @@ impl ReportProcessor for StdConsole {
         self.receiver = receiver;
     }
 
-    fn read_channel(&self){
+    fn read_channel(&self) -> bool {
         let buffer = self.receiver.recv();
-            match buffer {
-                Ok(buffer) => self.flush_buffer(buffer),
-                Err(error) => println!("StdConsole recieve error: {}", error),
+        match buffer {
+            Ok(buffer) => { self.flush_buffer(buffer); true },
+            Err(error) => { println!("StdConsole recieve error: {}", error); false },
         }
     }
 
     fn flush_buffer(&self, buffer: String){
         println!("{}",buffer);
     }
+
+    fn receive(&self) -> Result<String, RecvError> {
+        self.receiver.recv()
+    }
 }
+
 
 pub trait Reporter {
     fn bind_channel(self, processor_id: u8, reporter: Sender<String>) -> Self;
-    fn unbind_channel(self, processor_id: u8);
+    fn unbind_channel(self, processor_id: u8) -> Self;
     fn reporting_active(&self) -> bool;
     fn send_report(&self, buffer: String);
 }
@@ -270,8 +289,9 @@ impl Reporter for Actor {
         self
     }
 
-    fn unbind_channel(mut self, processor_id: u8) {
+    fn unbind_channel(mut self, processor_id: u8) -> Self {
         self.report_bindings.remove(&processor_id);
+        self
     }
 
     fn reporting_active(&self) -> bool {
