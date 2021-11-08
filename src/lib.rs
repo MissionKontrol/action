@@ -291,6 +291,7 @@ impl Reporter for Actor {
 
     fn unbind_channel(mut self, processor_id: u8) -> Self {
         self.report_bindings.remove(&processor_id);
+        // println!("Binding {} removed", processor_id);
         self
     }
 

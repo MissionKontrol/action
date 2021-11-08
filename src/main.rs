@@ -10,8 +10,8 @@ fn main() {
 
     let (sender, stdout_writer): (Sender<String>, Printer)
          = PRINTER::new(action::ProcessorType::Stdout);
-    // player1 = player1.bind_channel(1,sender.clone());
-    // player2 = player2.bind_channel(1,sender.clone());
+    player1 = player1.bind_channel(1,sender.clone());
+    player2 = player2.bind_channel(1,sender.clone());
 
     let mut actor_list: ActorList = vec![player1,player2];
     let order_of_appearance = actor_list.clone();
@@ -31,6 +31,7 @@ fn main() {
         })
         .unwrap();
 
+
     for _ in 0..5 {
         let mut turn = 0_u32;
         let mut acts = 0_u32;
@@ -47,14 +48,23 @@ fn main() {
                 }
             }
         }
-        sender.send(format!("Winner {} turns {}  acts {}", actor_list[0].get_id(), turn, acts));
+        if let Err(error) =  sender.send(format!("Winner {} turns {}  acts {}", actor_list[0].get_id(), turn, acts)){
+            println!("Error sending winner: {}", error);
+        }
     }
+    
+
+
+
+    drop(sender);
 
     for actor in actor_list {
         actor.unbind_channel(1);
     }
-    drop(sender);
-    _stdout_writer_thread.join();
+
+    // use std::{time};
+    // let ten_millis = time::Duration::from_millis(10);
+    // thread::sleep(ten_millis);
 }
 
 fn is_alive(actor: Option<Actor>) -> bool {
