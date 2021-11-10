@@ -18,7 +18,7 @@ pub trait ActionState {
 
 #[derive(Clone)]
 pub struct ActionReady {
-    actor_list: Vec<Actor>,
+    actor_list: ActorList,
     readied_action: ActionType,
 }
 
@@ -79,7 +79,7 @@ pub enum ActionType {
 
 #[derive(Debug, Clone)]
 pub struct Attack {
-    target: usize,
+    target: u8,
     attack_die: u8,
     damage_die: u8,
 }
@@ -91,16 +91,16 @@ trait Actions {
 impl Actions for Attack {
     fn execute(&self, mut current_actors: ActorList) -> ActorList {
         let result = Attack::roll_attack();
-        let mut target = current_actors.remove(self.target);  // wrong by id of actor
+        let mut target = current_actors.remove(&self.target).unwrap();  // wrong by id of actor
         if target.does_this_hit(result) {
             let damage = Attack::roll_damage(&self.damage_die);
             target = target.take_damage(damage);
         }
 
         if target.is_alive() { 
-            current_actors.push(target);
+            current_actors.insert(target.id,target);
         }
-            current_actors
+        current_actors
     }
 }
 
@@ -116,32 +116,44 @@ impl Attack {
     }
 }
 
-pub type ActorList = Vec<Actor>;
+pub type ActorList = HashMap<u8,Actor>;
 
 pub trait ActorListActions {
-    fn get_actor(&self, id: &usize) -> Option<Actor>;
+    fn get_actor(&self, id: &u8) -> Option<Actor>;
     fn done(&self) -> bool;
+    fn bind_channel(self, channel: Sender<String>, receiver_id: u8) -> Self;
 }
 
 impl ActorListActions for ActorList {
-    fn get_actor(&self, id: &usize) -> Option<Actor> {
-        match self.iter().find(|actor| actor.id == *id){
+    fn get_actor(&self, id: &u8) -> Option<Actor> {
+        let actor = self.get(id);
+        match actor {
             Some(actor) => Some(actor.to_owned()),
             None => None
         }
     }
 
     fn done(&self) -> bool {
-        let team_a_size = &self.iter().fold(0_u8,|acc, actor| if actor.team_id == 0 { acc + 1} else { acc });
-        let team_b_size = &self.iter().fold(0_u8,|acc, actor| if actor.team_id == 1 { acc + 1} else { acc });
+        let team_a_size = &self.iter().fold(0_u8,|acc, actor| if actor.1.team_id == 0 { acc + 1} else { acc });
+        let team_b_size = &self.iter().fold(0_u8,|acc, actor| if actor.1.team_id == 1 { acc + 1} else { acc });
         if team_a_size == &0 || team_b_size == &0 { return true }
         else { false }
+    }
+
+    fn bind_channel(self, sender: Sender<String>, reciever_id: u8) -> Self {
+        let mut actor_list: ActorList = HashMap::new();
+
+        for (id, player) in self {
+            let player = player.bind_channel(reciever_id,sender.clone());
+            actor_list.insert(id, player);
+        }
+        actor_list
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct Actor {
-    id: usize,
+    id: u8,
     team_id: u8,
     armour_class: u8,
     hit_points: u8,
@@ -151,7 +163,7 @@ pub struct Actor {
 }
 
 impl Actor {
-    pub fn new(id: usize, team_id: u8, armour_class: u8, hit_points: u8, hit_die: u8, damage_die: u8) -> Self { 
+    pub fn new(id: u8, team_id: u8, armour_class: u8, hit_points: u8, hit_die: u8, damage_die: u8) -> Self { 
         Self { id, team_id, armour_class, hit_points, hit_die, damage_die, report_bindings: HashMap::new()}}
 
     pub fn get_action(&self, actor_list: &ActorList) -> Action {
@@ -199,17 +211,23 @@ impl Actor {
         false
     }
 
-    pub fn get_id(&self) -> usize {
+    pub fn get_id(&self) -> u8 {
         self.id
     }
 
-    fn select_target(&self, actor_list:  &Vec<Actor>) -> Option<usize> {
-        let target_list = actor_list.iter().filter(|x| x.team_id != self.team_id).collect::<Vec<&Actor>>();
-        if target_list.len() > 0 { Some(target_list[0].id) }
+    fn select_target(&self, actor_list:  &ActorList) -> Option<u8> {
+        let target_list = actor_list
+            .iter()
+            .filter(|actor| actor.1.team_id != self.team_id)
+            .collect::<HashMap<&u8,&Actor>>();
+   
+        if let Some(target) = target_list.keys().next() {
+            Some(**target)
+        } 
         else { None }
     }
 
-    fn decide_action(&self, actor_list: &Vec<Actor>) -> ActionType {
+    fn decide_action(&self, actor_list: &ActorList) -> ActionType {
         if let Some(target) = self.select_target(actor_list) {
             ActionType::Attack(Attack{target, attack_die: self.damage_die, damage_die: self.damage_die})
         }
