@@ -4,10 +4,9 @@ use std::sync::mpsc::{Sender};
 use std::collections::HashMap;
 
 fn main() {
-
     let actor_list = get_players();
     let (sender, stdout_writer): (Sender<String>, Printer)
-    = PRINTER::new(action::ProcessorType::Stdout);
+        = PRINTER::new(action::ProcessorType::Stdout);
 
     let reciever_id = 0;
     let mut actor_list = actor_list.bind_channel(sender.clone(), reciever_id);
@@ -28,7 +27,6 @@ fn main() {
             }
         })
         .unwrap();
-
 
     for _ in 0..5 {
         let mut turn = 0_u32;
@@ -75,10 +73,10 @@ fn is_alive(actor: Option<Actor>) -> bool {
 }
 
 fn get_players() -> HashMap<u8, Actor> {
-    let mut player1 = Actor::new( 0,0,10, 20, 6, 6);
-    let mut player2 = Actor::new( 1,1,10, 20, 6, 6);
-    let mut player3 = Actor::new( 2,0,10, 20, 6, 6);
-    let mut player4 = Actor::new( 3,1,10, 20, 6, 6);
+    let player1 = Actor::new( 0,0,10, 20, 6, 6);
+    let player2 = Actor::new( 1,1,10, 20, 6, 6);
+    let player3 = Actor::new( 2,0,10, 20, 6, 6);
+    let player4 = Actor::new( 3,1,10, 20, 6, 6);
 
     let mut actor_list: ActorList = HashMap::new();
     actor_list.insert(player1.get_id(), player1);

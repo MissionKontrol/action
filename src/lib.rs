@@ -199,10 +199,12 @@ impl Actor {
             self = self.unbind_channel(1);
         }
         else {
-            self.hit_points = remaining_points as u8; }
+            self.hit_points = remaining_points as u8; 
             if self.reporting_active() {
                 self.send_report(format!("{} takes {} and survives on {}.", self.id, damage, self.hit_points));
             } 
+        }
+        
         self
     }
 
@@ -239,7 +241,6 @@ impl Actor {
 
 use std::{collections::HashMap, sync::mpsc::{Receiver,RecvError, Sender, channel}};
 
-
 pub type Printer = Box<PRINTER>;
 pub type PRINTER = dyn ReportProcessor + Send;
 
@@ -254,6 +255,7 @@ impl PRINTER{
         }
     }
 }
+
 pub enum ProcessorType {
     Stdout,
     Stderr,
@@ -292,7 +294,6 @@ impl ReportProcessor for StdConsole {
         self.receiver.recv()
     }
 }
-
 
 pub trait Reporter {
     fn bind_channel(self, processor_id: u8, reporter: Sender<String>) -> Self;
