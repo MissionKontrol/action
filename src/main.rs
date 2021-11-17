@@ -35,10 +35,11 @@ fn main() {
         actor_list = order_of_appearance.clone();
         while !actor_list.done() {
             turn +=1;
-            for actor in &order_of_appearance {
-                if is_alive(actor_list.get_actor(&actor.1.get_id())){
+            for (id, _) in &order_of_appearance {
+                if is_alive(actor_list.get_actor(id)){
                     acts += 1;
-                    let mut action_state: Action = actor.1.get_action(&actor_list);
+                    let active_actor = actor_list.get(id).unwrap();
+                    let mut action_state: Action = active_actor.get_action(&actor_list);
                     action_state = action_state.execute_action();
                     actor_list = action_state.get_actor_list().to_owned();
                 }
@@ -73,10 +74,10 @@ fn is_alive(actor: Option<Actor>) -> bool {
 }
 
 fn get_players() -> HashMap<u8, Actor> {
-    let player1 = Actor::new( 0,0,10, 20, 6, 6);
-    let player2 = Actor::new( 1,1,10, 20, 6, 6);
-    let player3 = Actor::new( 2,0,10, 20, 6, 6);
-    let player4 = Actor::new( 3,1,10, 20, 6, 6);
+    let player1 = Actor::new( 0,0,10, 20, 6, 6, 1);
+    let player2 = Actor::new( 1,1,10, 20, 6, 6, 1);
+    let player3 = Actor::new( 2,0,10, 20, 6, 6, 1);
+    let player4 = Actor::new( 3,1,10, 20, 6, 6, 1);
 
     let mut actor_list: ActorList = HashMap::new();
     actor_list.insert(player1.get_id(), player1);

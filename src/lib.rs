@@ -74,6 +74,7 @@ impl  ActionState for ActionComplete {
 pub enum ActionType {
     Attack(Attack),
     Dodge,
+    Flee,
     None,
 }
 
@@ -122,6 +123,8 @@ pub trait ActorListActions {
     fn get_actor(&self, id: &u8) -> Option<Actor>;
     fn done(&self) -> bool;
     fn bind_channel(self, channel: Sender<String>, receiver_id: u8) -> Self;
+    fn get_enemy_list(&self, team: u8) -> HashMap<&u8,&Actor>;
+    fn get_team_list(&self, team: u8) -> HashMap<&u8,&Actor>;
 }
 
 impl ActorListActions for ActorList {
@@ -149,6 +152,18 @@ impl ActorListActions for ActorList {
         }
         actor_list
     }
+
+    fn get_enemy_list(&self, team: u8) -> HashMap<&u8,&Actor> {
+        self.iter()
+            .filter(|actor| actor.1.team_id != team)
+            .collect::<HashMap<&u8,&Actor>>()
+    }
+
+    fn get_team_list(&self, team: u8) -> HashMap<&u8,&Actor> {
+        self.iter()
+            .filter(|actor| actor.1.team_id == team)
+            .collect::<HashMap<&u8,&Actor>>()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -159,12 +174,13 @@ pub struct Actor {
     hit_points: u8,
     hit_die: u8,
     damage_die: u8,
+    action_points: u8,
     report_bindings: HashMap<u8,Sender<String>>,
 }
 
 impl Actor {
-    pub fn new(id: u8, team_id: u8, armour_class: u8, hit_points: u8, hit_die: u8, damage_die: u8) -> Self { 
-        Self { id, team_id, armour_class, hit_points, hit_die, damage_die, report_bindings: HashMap::new()}}
+    pub fn new(id: u8, team_id: u8, armour_class: u8, hit_points: u8, hit_die: u8, damage_die: u8, action_points: u8) -> Self { 
+        Self { id, team_id, armour_class, hit_points, hit_die, damage_die, action_points, report_bindings: HashMap::new()}}
 
     pub fn get_action(&self, actor_list: &ActorList) -> Action {
         let action = self.decide_action(actor_list);
@@ -218,10 +234,7 @@ impl Actor {
     }
 
     fn select_target(&self, actor_list:  &ActorList) -> Option<u8> {
-        let target_list = actor_list
-            .iter()
-            .filter(|actor| actor.1.team_id != self.team_id)
-            .collect::<HashMap<&u8,&Actor>>();
+        let target_list = actor_list.get_enemy_list(self.team_id);
    
         if let Some(target) = target_list.keys().next() {
             Some(**target)
@@ -230,13 +243,36 @@ impl Actor {
     }
 
     fn decide_action(&self, actor_list: &ActorList) -> ActionType {
-        if let Some(target) = self.select_target(actor_list) {
-            ActionType::Attack(Attack{target, attack_die: self.damage_die, damage_die: self.damage_die})
+        if let FightOrFlee::Flee = self.fight_or_flee() {
+            return ActionType::Flee
+        } 
+        else if self.action_points > 0 {
+            if let Some(target) = self.select_target(actor_list) {
+                return ActionType::Attack(Attack{target, attack_die: self.damage_die, damage_die: self.damage_die})
+            }
+        }
+        ActionType::None
+    }
+
+    fn fight_or_flee(&self) -> FightOrFlee {
+        const FLEE_LIMIT:u8 = 6;
+        println!("Hit points remaining: {}", self.hit_points);
+        if self.hit_points < FLEE_LIMIT {
+            println!("Flee!");
+
+            FightOrFlee::Flee
         }
         else {
-            ActionType::None
+            println!("Fight!");
+
+            FightOrFlee::Fight
         }
     }
+}
+
+enum FightOrFlee {
+    Flee,
+    Fight,
 }
 
 use std::{collections::HashMap, sync::mpsc::{Receiver,RecvError, Sender, channel}};
