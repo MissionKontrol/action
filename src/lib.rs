@@ -74,7 +74,7 @@ impl  ActionState for ActionComplete {
 pub enum ActionType {
     Attack(Attack),
     Dodge,
-    Flee,
+    Flee(u8),
     None,
 }
 
@@ -83,6 +83,18 @@ pub struct Attack {
     target: u8,
     attack_die: u8,
     damage_die: u8,
+}
+
+impl Attack {
+    fn roll_attack() -> u8 {
+        let mut rng = rand::thread_rng();
+        rng.gen_range(1..=20) as u8
+    }
+
+    fn roll_damage(damage_die: &u8) -> u8 {
+        let mut rng = rand::thread_rng();
+        rng.gen_range(1..= *damage_die) as u8
+    }
 }
 
 trait Actions {
@@ -105,15 +117,15 @@ impl Actions for Attack {
     }
 }
 
-impl Attack {
-    fn roll_attack() -> u8 {
-        let mut rng = rand::thread_rng();
-        rng.gen_range(1..=20) as u8
-    }
+#[derive(Clone, Debug)]
+pub struct Flee {
+    id: u8,
+}
 
-    fn roll_damage(damage_die: &u8) -> u8 {
-        let mut rng = rand::thread_rng();
-        rng.gen_range(1..= *damage_die) as u8
+impl Actions for Flee {
+    fn execute(&self, mut current_actors: ActorList) -> ActorList {
+        current_actors.remove(&self.id).unwrap();
+        current_actors
     }
 }
 
@@ -244,7 +256,7 @@ impl Actor {
 
     fn decide_action(&self, actor_list: &ActorList) -> ActionType {
         if let FightOrFlee::Flee = self.fight_or_flee() {
-            return ActionType::Flee
+            return ActionType::Flee(self.id)
         } 
         else if self.action_points > 0 {
             if let Some(target) = self.select_target(actor_list) {
@@ -256,15 +268,10 @@ impl Actor {
 
     fn fight_or_flee(&self) -> FightOrFlee {
         const FLEE_LIMIT:u8 = 6;
-        println!("Hit points remaining: {}", self.hit_points);
         if self.hit_points < FLEE_LIMIT {
-            println!("Flee!");
-
             FightOrFlee::Flee
         }
         else {
-            println!("Fight!");
-
             FightOrFlee::Fight
         }
     }
@@ -362,4 +369,9 @@ impl Reporter for Actor {
             }
         }
     }
+}
+
+pub struct WinnerData {
+    winning_team: Vec<Actor>,
+    turns_taken: u16,
 }

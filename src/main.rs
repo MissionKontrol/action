@@ -4,12 +4,12 @@ use std::sync::mpsc::{Sender};
 use std::collections::HashMap;
 
 fn main() {
-    let actor_list = get_players();
+    let mut actor_list = get_players();
     let (sender, stdout_writer): (Sender<String>, Printer)
         = PRINTER::new(action::ProcessorType::Stdout);
 
     let reciever_id = 0;
-    let mut actor_list = actor_list.bind_channel(sender.clone(), reciever_id);
+    // let mut actor_list = actor_list.bind_channel(sender.clone(), reciever_id);
 
     let order_of_appearance = actor_list.clone();
 
